@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
     try {
@@ -10,6 +10,20 @@ export async function POST(req: NextRequest) {
         }
 
         const token = authHeader.replace('Bearer ', '');
+
+        // Create authenticated Supabase client with user's token for RLS
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                global: {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            }
+        );
+
         const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
         if (authError || !user) {

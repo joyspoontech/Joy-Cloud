@@ -320,9 +320,9 @@ export default function Dashboard() {
 
             {/* Navbar */}
             <header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-16 px-6 flex justify-between items-center sticky top-0 z-10">
-                <div className="flex items-center space-x-3">
-                    <div className="h-8 w-8 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
-                        <HardDrive className="text-white h-4 w-4" />
+                <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
+                    <div className="h-8 w-8 relative bg-white rounded-lg shadow-sm overflow-hidden">
+                        <img src="/icon.png" alt="Joy Cloud" className="h-full w-full object-cover" />
                     </div>
                     <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Joy Cloud</h1>
                 </div>

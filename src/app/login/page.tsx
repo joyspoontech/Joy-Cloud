@@ -52,8 +52,10 @@ export default function LoginPage() {
 
                 <div className="max-w-md w-full mx-auto space-y-8">
                     <div className="space-y-2 text-center lg:text-left">
-                        <div className="inline-flex h-12 w-12 bg-blue-600 rounded-xl items-center justify-center mb-4 shadow-lg shadow-blue-600/20">
-                            <Cloud className="h-6 w-6 text-white" />
+                        <div className="inline-block h-16 w-16 mb-4 relative drop-shadow-xl hover:scale-105 transition-transform duration-300">
+                            <div className="h-full w-full bg-white rounded-2xl flex items-center justify-center overflow-hidden shadow-lg shadow-blue-500/20">
+                                <img src="/icon.png" alt="Joy Cloud Logo" className="h-full w-full object-cover" />
+                            </div>
                         </div>
                         <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
                             {isSignUp ? 'Create an account' : 'Welcome back'}

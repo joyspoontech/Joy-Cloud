@@ -10,8 +10,8 @@ export default function Home() {
       <header className="fixed top-0 w-full z-50 glass border-b border-gray-200/50 dark:border-white/5 transition-all duration-300">
         <div className="px-6 h-16 flex justify-between items-center max-w-7xl mx-auto w-full">
           <div className="flex items-center space-x-3 group cursor-pointer">
-            <div className="h-9 w-9 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
-              <Cloud className="text-white h-5 w-5" />
+            <div className="h-9 w-9 bg-white rounded-xl shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform duration-300 flex items-center justify-center overflow-hidden">
+              <Image src="/icon.png" alt="Joy Cloud Logo" width={36} height={36} className="object-cover" />
             </div>
             <span className="font-bold text-xl tracking-tight text-slate-900 dark:text-white">Joy Cloud</span>
           </div>
@@ -173,7 +173,9 @@ export default function Home() {
         <div className="max-w-7xl mx-auto grid md:grid-cols-4 gap-12 mb-12">
           <div className="col-span-2 space-y-4">
             <div className="flex items-center space-x-2">
-              <Cloud className="text-blue-600 h-6 w-6" />
+              <div className="h-8 w-8 relative">
+                <Image src="/icon.png" alt="Joy Cloud Logo" fill className="object-contain" />
+              </div>
               <span className="font-bold text-xl text-slate-900 dark:text-white">Joy Cloud</span>
             </div>
             <p className="text-slate-500 dark:text-slate-400 max-w-xs">

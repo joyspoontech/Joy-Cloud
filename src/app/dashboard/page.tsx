@@ -324,7 +324,7 @@ export default function Dashboard() {
                     <div className="h-8 w-8 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
                         <HardDrive className="text-white h-4 w-4" />
                     </div>
-                    <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">CloudVault</h1>
+                    <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Joy Cloud</h1>
                 </div>
 
                 <div className="flex-1 max-w-xl mx-8">

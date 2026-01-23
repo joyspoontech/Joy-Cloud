@@ -118,7 +118,7 @@ export default function LoginPage() {
                     </div>
                     <div className="glass-card p-8 rounded-2xl max-w-lg">
                         <p className="text-lg leading-relaxed text-slate-100 mb-6">
-                            "CloudVault has completely transformed how our team handles secure file transfers. The S3 integration speeds are improving our workflow daily."
+                            "Joy Cloud has completely transformed how our team handles secure file transfers. The S3 integration speeds are improving our workflow daily."
                         </p>
                         <div className="flex items-center space-x-4">
                             <div className="h-10 w-10 bg-white/20 rounded-full flex items-center justify-center">

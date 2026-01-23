@@ -13,7 +13,7 @@ export default function Home() {
             <div className="h-9 w-9 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
               <Cloud className="text-white h-5 w-5" />
             </div>
-            <span className="font-bold text-xl tracking-tight text-slate-900 dark:text-white">CloudVault</span>
+            <span className="font-bold text-xl tracking-tight text-slate-900 dark:text-white">Joy Cloud</span>
           </div>
           <nav className="hidden md:flex space-x-8 text-sm font-medium">
             {[
@@ -79,7 +79,7 @@ export default function Home() {
               <div className="relative aspect-[16/9] bg-slate-100 dark:bg-slate-900 rounded-xl overflow-hidden shadow-2xl border border-gray-200 dark:border-slate-800">
                 <Image
                   src="/dashboard-preview.png"
-                  alt="CloudVault Dashboard Preview"
+                  alt="Joy Cloud Dashboard Preview"
                   fill
                   className="object-cover"
                 />
@@ -95,7 +95,7 @@ export default function Home() {
         <section id="features" className="bg-slate-50 dark:bg-slate-950/50 py-32 px-6 border-t border-gray-200 dark:border-slate-800">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-20">
-              <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white mb-6">Why CloudVault?</h2>
+              <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white mb-6">Why Joy Cloud?</h2>
               <p className="text-slate-600 dark:text-slate-400 text-lg max-w-2xl mx-auto">
                 We ve re-engineered cloud storage from the ground up to focus on what matters most: security, speed, and simplicity.
               </p>
@@ -151,7 +151,7 @@ export default function Home() {
                   Ready to secure your business?
                 </h2>
                 <p className="text-slate-300 text-lg">
-                  Join 10,000+ professionals trusting CloudVault with their mission-critical data today.
+                  Join 10,000+ professionals trusting Joy Cloud with their mission-critical data today.
                 </p>
                 <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
                   <Link href="/login">
@@ -174,7 +174,7 @@ export default function Home() {
           <div className="col-span-2 space-y-4">
             <div className="flex items-center space-x-2">
               <Cloud className="text-blue-600 h-6 w-6" />
-              <span className="font-bold text-xl text-slate-900 dark:text-white">CloudVault</span>
+              <span className="font-bold text-xl text-slate-900 dark:text-white">Joy Cloud</span>
             </div>
             <p className="text-slate-500 dark:text-slate-400 max-w-xs">
               Secure, scalable, and simple file storage for modern teams and professionals.
@@ -198,7 +198,7 @@ export default function Home() {
           </div>
         </div>
         <div className="max-w-7xl mx-auto pt-8 border-t border-gray-200 dark:border-slate-800 flex flex-col md:flex-row justify-between items-center text-slate-400 text-sm">
-          <p>&copy; 2026 CloudVault Inc.</p>
+          <p>&copy; 2026 Joy Cloud Inc.</p>
           <div className="space-x-6 mt-4 md:mt-0">
             <a href="#" className="hover:text-blue-600">Privacy Policy</a>
             <a href="#" className="hover:text-blue-600">Terms of Service</a>

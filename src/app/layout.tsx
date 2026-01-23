@@ -15,7 +15,7 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "CloudVault - Secure Storage",
+  title: "Joy Cloud - Secure Storage",
   description: "Secure, professional cloud storage platform.",
 };
 

@@ -267,11 +267,25 @@ export default function Dashboard() {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-                if (data?.role === 'admin') setIsAdmin(true);
+                if (data?.role === 'admin') {
+                    setIsAdmin(true);
+                    // Fetch pending users count
+                    fetchPendingCount();
+                }
             }
         };
         checkRole();
     }, []);
+
+    const [pendingUsersCount, setPendingUsersCount] = useState(0);
+
+    const fetchPendingCount = async () => {
+        const { count } = await supabase
+            .from('profiles')
+            .select('*', { count: 'exact', head: true })
+            .eq('approval_status', 'pending');
+        setPendingUsersCount(count || 0);
+    };
 
     const handleDelete = async (id: string, type: 'file' | 'folder') => {
         if (!confirm('Are you sure you want to delete this item? It will be moved to the Recycle Bin.')) return;
@@ -343,10 +357,21 @@ export default function Dashboard() {
                     Sync
                 </Button>
                 {isAdmin && (
-                    <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/recycle-bin')} className="mr-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Recycle Bin
-                    </Button>
+                    <>
+                        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/pending-users')} className="mr-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10 relative">
+                            <Clock className="h-4 w-4 mr-2" />
+                            Pending Users
+                            {pendingUsersCount > 0 && (
+                                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-semibold">
+                                    {pendingUsersCount}
+                                </span>
+                            )}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/recycle-bin')} className="mr-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Recycle Bin
+                        </Button>
+                    </>
                 )}
                 <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
                     <LogOut className="h-4 w-4 mr-2" />

@@ -21,18 +21,73 @@ export default function LoginPage() {
 
         try {
             if (isSignUp) {
-                const { error } = await supabase.auth.signUp({
+                const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
                 });
                 if (error) throw error;
-                alert('Check your email for the confirmation link!');
+
+                // Notify admin via n8n webhook
+                if (data.user) {
+                    try {
+                        await fetch('/api/webhook/notify-admin', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                userId: data.user.id,
+                                email: data.user.email,
+                                createdAt: new Date().toISOString()
+                            }),
+                        });
+                    } catch (webhookError) {
+                        console.error('Failed to notify admin:', webhookError);
+                        // Don't block signup if webhook fails
+                    }
+                }
+
+                alert('Account created! You will receive an email once an admin approves your request.');
             } else {
-                const { error } = await supabase.auth.signInWithPassword({
+                const { data, error } = await supabase.auth.signInWithPassword({
                     email,
                     password,
                 });
                 if (error) throw error;
+
+                // Check user approval status
+                if (data.user) {
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('approval_status, rejected_at')
+                        .eq('id', data.user.id)
+                        .single();
+
+                    if (profile) {
+                        if (profile.approval_status === 'pending') {
+                            await supabase.auth.signOut();
+                            alert('Your account is pending admin approval. You will be notified once approved.');
+                            return;
+                        } else if (profile.approval_status === 'rejected') {
+                            await supabase.auth.signOut();
+
+                            // Check if 3 days have passed
+                            if (profile.rejected_at) {
+                                const rejectedDate = new Date(profile.rejected_at);
+                                const threeDaysLater = new Date(rejectedDate.getTime() + (3 * 24 * 60 * 60 * 1000));
+                                const canRetry = new Date() >= threeDaysLater;
+
+                                if (canRetry) {
+                                    alert('Your previous request was declined. You can sign up again if you wish.');
+                                } else {
+                                    alert(`Your account request was declined. You can try again after ${threeDaysLater.toLocaleDateString()}.`);
+                                }
+                            } else {
+                                alert('Your account request was declined. Please contact support.');
+                            }
+                            return;
+                        }
+                    }
+                }
+
                 router.push('/dashboard');
             }
         } catch (error: any) {

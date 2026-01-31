@@ -36,12 +36,6 @@ export async function POST(request: Request) {
         }
 
         const key = `${prefix}${filename}`;
-        // Note: Removing timestamp prefix to keep names clean in S3 as per user preference likely, 
-        // OR keeping it but ensuring it's inside the folder. 
-        // Let's keep the timestamp to avoid collisions, but maybe simpler?
-        // User saw "1769163056845-Screenshot..." in the screenshot.
-        // Let's stick effectively to `${prefix}${Date.now()}-${filename}` to match existing pattern but nested.
-        const finalKey = `${prefix}${Date.now()}-${filename}`;
 
         const command = new PutObjectCommand({
             Bucket: process.env.AWS_BUCKET_NAME!,

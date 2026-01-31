@@ -31,6 +31,7 @@ export default function Dashboard() {
     const [breadcrumbs, setBreadcrumbs] = useState<FolderRecord[]>([]);
 
     const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number; status: 'uploading' | 'complete' | 'error' }[]>([]);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
@@ -143,28 +144,99 @@ export default function Dashboard() {
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
+        e.stopPropagation();
         setIsDragging(true);
     };
 
     const handleDragLeave = (e: React.DragEvent) => {
         e.preventDefault();
-        setIsDragging(false);
+        e.stopPropagation();
+        // Only hide overlay if leaving the main container
+        if (e.currentTarget === e.target) {
+            setIsDragging(false);
+        }
+    };
+
+    // Helper function to traverse folders in drag-and-drop
+    const traverseFileTree = async (item: any, path: string = ''): Promise<File[]> => {
+        const files: File[] = [];
+
+        if (item.isFile) {
+            return new Promise((resolve) => {
+                item.file((file: File) => {
+                    // Add path information to file for folder structure
+                    const fileWithPath = new File([file], file.name, { type: file.type });
+                    Object.defineProperty(fileWithPath, 'webkitRelativePath', {
+                        value: path ? `${path}/${file.name}` : file.name,
+                        writable: false
+                    });
+                    resolve([fileWithPath]);
+                });
+            });
+        } else if (item.isDirectory) {
+            const dirReader = item.createReader();
+            return new Promise((resolve) => {
+                const readEntries = () => {
+                    dirReader.readEntries(async (entries: any[]) => {
+                        if (entries.length === 0) {
+                            resolve(files);
+                            return;
+                        }
+
+                        for (const entry of entries) {
+                            const newPath = path ? `${path}/${item.name}` : item.name;
+                            const entryFiles = await traverseFileTree(entry, newPath);
+                            files.push(...entryFiles);
+                        }
+
+                        readEntries(); // Continue reading if there are more entries
+                    });
+                };
+                readEntries();
+            });
+        }
+
+        return files;
     };
 
     const handleDrop = async (e: React.DragEvent) => {
         e.preventDefault();
+        e.stopPropagation();
         setIsDragging(false);
 
+        const items = Array.from(e.dataTransfer.items);
+        const allFiles: File[] = [];
+
+        // Check if we're dropping folders using FileSystemEntry API
+        if (items.length > 0 && typeof items[0].webkitGetAsEntry === 'function') {
+            for (const item of items) {
+                const entry = item.webkitGetAsEntry();
+                if (entry) {
+                    const files = await traverseFileTree(entry);
+                    allFiles.push(...files);
+                }
+            }
+
+            if (allFiles.length > 0) {
+                // Convert to FileList-like object
+                const fileList = Object.assign(allFiles, { item: (i: number) => allFiles[i] });
+                await processBatchUpload(fileList as any);
+                return;
+            }
+        }
+
+        // Fallback to regular file handling
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            await processUpload(e.dataTransfer.files[0]);
+            await processBatchUpload(e.dataTransfer.files);
         }
     };
 
-    const processUpload = async (file: File) => {
+    const processUpload = async (file: File, customFolderPath?: string) => {
         try {
-            setUploading(true);
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
+
+            const folderPath = customFolderPath !== undefined ? customFolderPath : getCurrentPath();
 
             const res = await fetch('/api/upload', {
                 method: 'POST',
@@ -176,11 +248,15 @@ export default function Dashboard() {
                     filename: file.name,
                     contentType: file.type,
                     size: file.size,
-                    folderPath: getCurrentPath()
+                    folderPath: folderPath
                 }),
             });
 
-            if (!res.ok) throw new Error('Failed to get upload URL');
+            if (!res.ok) {
+                const errorData = await res.text();
+                console.error('Upload API error:', errorData);
+                throw new Error(`Failed to get upload URL: ${errorData}`);
+            }
             const { url, key } = await res.json();
 
             const uploadRes = await fetch(url, {
@@ -189,7 +265,57 @@ export default function Dashboard() {
                 headers: { 'Content-Type': file.type },
             });
 
-            if (!uploadRes.ok) throw new Error('Upload to S3 failed');
+            if (!uploadRes.ok) {
+                const errorText = await uploadRes.text();
+                console.error('S3 upload failed:', uploadRes.status, errorText);
+                throw new Error(`Upload to S3 failed: ${uploadRes.status} - ${errorText}`);
+            }
+
+            // Determine folder_id for database insertion
+            let targetFolderId: string | null = currentFolder ? currentFolder.id : null;
+
+            // If customFolderPath is provided and different from current path, find/create the folder
+            if (customFolderPath && customFolderPath !== getCurrentPath()) {
+                const pathParts = customFolderPath.split('/').filter(p => p);
+                let parentId: string | null = null;
+
+                for (const folderName of pathParts) {
+                    // Check if folder exists
+                    let folderQuery = supabase
+                        .from('folders')
+                        .select('id')
+                        .eq('name', folderName)
+                        .is('deleted_at', null);
+
+                    if (parentId) {
+                        folderQuery = folderQuery.eq('parent_id', parentId);
+                    } else {
+                        folderQuery = folderQuery.is('parent_id', null);
+                    }
+
+                    const { data: existingFolders } = await folderQuery;
+
+                    if (existingFolders && existingFolders.length > 0) {
+                        parentId = existingFolders[0].id;
+                    } else {
+                        // Create folder
+                        const { data: newFolder, error: folderError }: { data: any; error: any } = await supabase
+                            .from('folders')
+                            .insert({
+                                name: folderName,
+                                user_id: session.user.id,
+                                parent_id: parentId
+                            })
+                            .select()
+                            .single();
+
+                        if (folderError) throw folderError;
+                        parentId = newFolder.id;
+                    }
+                }
+
+                targetFolderId = parentId;
+            }
 
             const { error } = await supabase.from('files').insert({
                 name: file.name,
@@ -197,22 +323,105 @@ export default function Dashboard() {
                 type: file.type,
                 s3_key: key,
                 user_id: session.user.id,
-                folder_id: currentFolder ? currentFolder.id : null
+                folder_id: targetFolderId
             });
 
             if (error) throw error;
-            fetchContent();
         } catch (error) {
             console.error(error);
-            alert('Upload failed!');
-        } finally {
-            setUploading(false);
+            throw error; // Re-throw for batch handler
         }
     };
 
     const handleUploadInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
-        await processUpload(e.target.files[0]);
+        await processBatchUpload(e.target.files);
+        e.target.value = ''; // Reset input for re-selection
+    };
+
+    const handleFolderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        await processBatchUpload(e.target.files);
+        e.target.value = ''; // Reset input
+    };
+
+    const processBatchUpload = async (fileList: FileList) => {
+        const files = Array.from(fileList);
+        if (files.length === 0) return;
+
+        setUploading(true);
+        setUploadProgress(files.map(f => ({ fileName: f.name, progress: 0, status: 'uploading' })));
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            setUploading(false);
+            return;
+        }
+
+        // Extract folder structure from file paths (for folder uploads)
+        const folderStructure = extractFolderStructure(files);
+
+        // Upload files sequentially to avoid overwhelming the API
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            try {
+                // Update progress
+                setUploadProgress(prev => prev.map((p, idx) =>
+                    idx === i ? { ...p, progress: 50 } : p
+                ));
+
+                // Determine target folder
+                const filePath = (file as any).webkitRelativePath || file.name;
+                const pathParts = filePath.split('/');
+                const fileName = pathParts.pop()!;
+                const folderPath = pathParts.filter((p: string) => p).join('/'); // Filter out empty parts
+
+                // Get current folder path
+                const basePath = getCurrentPath();
+                let fullPath = '';
+                if (basePath && folderPath) {
+                    fullPath = `${basePath}/${folderPath}`;
+                } else if (basePath) {
+                    fullPath = basePath;
+                } else if (folderPath) {
+                    fullPath = folderPath;
+                }
+
+                await processUpload(file, fullPath);
+
+                // Mark as complete
+                setUploadProgress(prev => prev.map((p, idx) =>
+                    idx === i ? { ...p, progress: 100, status: 'complete' } : p
+                ));
+            } catch (error) {
+                console.error(`Failed to upload ${file.name}:`, error);
+                setUploadProgress(prev => prev.map((p, idx) =>
+                    idx === i ? { ...p, status: 'error' } : p
+                ));
+                alert(`Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
+
+        setUploading(false);
+        // Clear progress after 2 seconds
+        setTimeout(() => setUploadProgress([]), 2000);
+        fetchContent();
+    };
+
+    const extractFolderStructure = (files: File[]) => {
+        const structure = new Map<string, string[]>();
+        files.forEach(file => {
+            const path = (file as any).webkitRelativePath || file.name;
+            const parts = path.split('/');
+            if (parts.length > 1) {
+                const folder = parts.slice(0, -1).join('/');
+                if (!structure.has(folder)) {
+                    structure.set(folder, []);
+                }
+                structure.get(folder)!.push(file.name);
+            }
+        });
+        return structure;
     };
 
     const handleDownload = async (fileId: string) => {
@@ -407,18 +616,65 @@ export default function Dashboard() {
                         <div className="relative">
                             <input
                                 type="file"
+                                /* @ts-ignore */
+                                webkitdirectory=""
+                                directory=""
+                                onChange={handleFolderUpload}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                disabled={uploading}
+                                title="Upload folder"
+                            />
+                            <Button variant="outline" loading={uploading} className="text-slate-600 dark:text-slate-300">
+                                <Folder className="h-4 w-4 mr-2" />
+                                Upload Folder
+                            </Button>
+                        </div>
+                        <div className="relative">
+                            <input
+                                type="file"
+                                multiple
                                 onChange={handleUploadInput}
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                 disabled={uploading}
-                                title="Upload file"
+                                title="Upload files"
                             />
                             <Button loading={uploading} className="bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20">
                                 <Upload className="h-4 w-4 mr-2" />
-                                Upload File
+                                Upload Files
                             </Button>
                         </div>
                     </div>
                 </div>
+
+                {/* Upload Progress */}
+                {uploadProgress.length > 0 && (
+                    <div className="mb-6 bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm p-4">
+                        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Uploading {uploadProgress.length} file(s)</h3>
+                        <div className="space-y-2">
+                            {uploadProgress.map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-3">
+                                    <div className="flex-1">
+                                        <div className="flex justify-between text-xs mb-1">
+                                            <span className="text-slate-700 dark:text-slate-300 truncate">{item.fileName}</span>
+                                            <span className="text-slate-500">
+                                                {item.status === 'complete' ? '✓' : item.status === 'error' ? '✗' : `${item.progress}%`}
+                                            </span>
+                                        </div>
+                                        <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full transition-all duration-300 ${item.status === 'complete' ? 'bg-green-500' :
+                                                    item.status === 'error' ? 'bg-red-500' :
+                                                        'bg-blue-500'
+                                                    }`}
+                                                style={{ width: `${item.progress}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Content Area */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[400px]">

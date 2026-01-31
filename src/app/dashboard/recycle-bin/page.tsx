@@ -19,6 +19,7 @@ export default function RecycleBin() {
     const [items, setItems] = useState<DeletedItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const router = useRouter();
 
     useEffect(() => {
@@ -126,6 +127,58 @@ export default function RecycleBin() {
         }
     };
 
+    const handleBulkDelete = async () => {
+        if (selectedItems.size === 0) return;
+
+        if (!confirm(`This will permanently delete ${selectedItems.size} item(s). This action is irreversible. Continue?`)) return;
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+
+            for (const itemId of Array.from(selectedItems)) {
+                const item = items.find(i => i.id === itemId);
+                if (!item) continue;
+
+                const res = await fetch('/api/delete-permanent', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session?.access_token}`
+                    },
+                    body: JSON.stringify({ id: item.id, type: item.type })
+                });
+
+                if (!res.ok) throw new Error(`Failed to delete ${item.name}`);
+            }
+
+            setSelectedItems(new Set());
+            fetchDeletedItems();
+            alert(`Successfully deleted ${selectedItems.size} item(s)`);
+
+        } catch (error) {
+            console.error(error);
+            alert('Failed to delete some items.');
+        }
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedItems.size === items.length) {
+            setSelectedItems(new Set());
+        } else {
+            setSelectedItems(new Set(items.map(i => i.id)));
+        }
+    };
+
+    const toggleSelectItem = (id: string) => {
+        const newSelected = new Set(selectedItems);
+        if (newSelected.has(id)) {
+            newSelected.delete(id);
+        } else {
+            newSelected.add(id);
+        }
+        setSelectedItems(newSelected);
+    };
+
     if (loading) return <div className="p-10 flex justify-center"><div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div></div>;
 
     return (
@@ -142,11 +195,28 @@ export default function RecycleBin() {
                             Recycle Bin (Admin)
                         </h1>
                     </div>
+                    {selectedItems.size > 0 && (
+                        <Button
+                            onClick={handleBulkDelete}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Selected ({selectedItems.size})
+                        </Button>
+                    )}
                 </div>
 
                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow border border-slate-200 dark:border-slate-800 overflow-hidden">
                     <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-xs font-semibold text-slate-500 uppercase">
-                        <div className="col-span-6">Name</div>
+                        <div className="col-span-1 flex items-center">
+                            <input
+                                type="checkbox"
+                                checked={items.length > 0 && selectedItems.size === items.length}
+                                onChange={toggleSelectAll}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div className="col-span-5">Name</div>
                         <div className="col-span-2">Type</div>
                         <div className="col-span-2">Deleted At</div>
                         <div className="col-span-2 text-right">Actions</div>
@@ -157,8 +227,16 @@ export default function RecycleBin() {
                             <div className="p-12 text-center text-slate-500">Recycle Bin is empty</div>
                         )}
                         {items.map(item => (
-                            <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center">
-                                <div className="col-span-6 font-medium flex items-center truncate">
+                            <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                <div className="col-span-1 flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedItems.has(item.id)}
+                                        onChange={() => toggleSelectItem(item.id)}
+                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="col-span-5 font-medium flex items-center truncate">
                                     {item.type === 'folder' ? <div className="h-8 w-8 bg-blue-100 dark:bg-blue-900/30 rounded flex items-center justify-center mr-3"><Trash2 className="h-4 w-4 text-blue-600" /></div> : <FileThumbnail fileId={item.id} type="file" name={item.name} />}
                                     <span className="truncate" title={item.name}>{item.name}</span>
                                 </div>

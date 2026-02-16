@@ -144,6 +144,14 @@ export default function LoginPage() {
                             />
                         </div>
 
+                        <div className="flex justify-end">
+                            {!isSignUp && (
+                                <Link href="/forgot-password" className="text-xs text-blue-600 hover:underline font-medium">
+                                    Forgot password?
+                                </Link>
+                            )}
+                        </div>
+
                         <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 shadow-lg shadow-blue-500/20 h-12 text-base" type="submit" loading={loading}>
                             {isSignUp ? 'Sign up' : 'Sign in'}
                         </Button>

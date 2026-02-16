@@ -12,7 +12,7 @@ interface DeletedItem {
     name: string;
     type: 'file' | 'folder';
     deleted_at: string;
-    size?: number; // only for files
+    size?: number;
 }
 
 export default function RecycleBin() {
@@ -52,13 +52,11 @@ export default function RecycleBin() {
     const fetchDeletedItems = async () => {
         setLoading(true);
 
-        // Fetch deleted folders
         const { data: folders } = await supabase
             .from('folders')
             .select('id, name, deleted_at')
             .not('deleted_at', 'is', null);
 
-        // Fetch deleted files
         const { data: files } = await supabase
             .from('files')
             .select('id, name, size, type, deleted_at')
@@ -90,23 +88,6 @@ export default function RecycleBin() {
     const handlePermanentDelete = async (id: string, type: 'file' | 'folder') => {
         if (!confirm('This action is irreversible. The item will be permanently removed from storage.')) return;
 
-        // For files, we strictly should delete from S3 too. 
-        // For now, let's delete from DB and let the "Sync" cleanup S3? 
-        // No, Sync deletes from DB if missing in S3.
-        // If we delete from DB, S3 still has it. Sync will re-add it? 
-        // YES. The Sync logic adds files found in S3.
-        // So we MUST delete from S3 first.
-
-        // We need an API route for permanent deletion to handle S3 securely.
-        // Let's call /api/permanent-delete (Need to create this) OR just use Sync to prune?
-        // Wait, if I delete from DB, Sync will see it in S3 and ADD it back.
-        // If I delete from S3, Sync will see it missing in S3 and REMOVE it from DB (Soft or Hard? My sync logic Hard Deletes!)
-
-        // So correct flow:
-        // 1. Delete from S3 (via API)
-        // 2. Delete from DB (via API or Sync)
-
-        // Let's create an API endpoint: /api/delete-permanent
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const res = await fetch('/api/delete-permanent', {
@@ -182,21 +163,23 @@ export default function RecycleBin() {
     if (loading) return <div className="p-10 flex justify-center"><div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div></div>;
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-8">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
             <div className="max-w-5xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8">
                     <div className="flex items-center">
-                        <Button variant="ghost" onClick={() => router.push('/dashboard')} className="mr-4">
-                            <ArrowLeft className="h-4 w-4 mr-2" />
-                            Back
+                        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="mr-2 md:mr-4">
+                            <ArrowLeft className="h-4 w-4 mr-1 md:mr-2" />
+                            <span className="hidden sm:inline">Back</span>
                         </Button>
-                        <h1 className="text-2xl font-bold flex items-center text-slate-900 dark:text-white">
-                            <Trash2 className="mr-3 h-6 w-6 text-red-500" />
-                            Recycle Bin (Admin)
+                        <h1 className="text-xl md:text-2xl font-bold flex items-center text-slate-900 dark:text-white">
+                            <Trash2 className="mr-2 md:mr-3 h-5 w-5 md:h-6 md:w-6 text-red-500" />
+                            Recycle Bin
                         </h1>
                     </div>
                     {selectedItems.size > 0 && (
                         <Button
+                            size="sm"
                             onClick={handleBulkDelete}
                             className="bg-red-600 hover:bg-red-700"
                         >
@@ -207,7 +190,8 @@ export default function RecycleBin() {
                 </div>
 
                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow border border-slate-200 dark:border-slate-800 overflow-hidden">
-                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-xs font-semibold text-slate-500 uppercase">
+                    {/* Desktop Header */}
+                    <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-xs font-semibold text-slate-500 uppercase">
                         <div className="col-span-1 flex items-center">
                             <input
                                 type="checkbox"
@@ -222,13 +206,27 @@ export default function RecycleBin() {
                         <div className="col-span-2 text-right">Actions</div>
                     </div>
 
+                    {/* Mobile Header */}
+                    <div className="md:hidden flex items-center gap-3 px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800">
+                        <input
+                            type="checkbox"
+                            checked={items.length > 0 && selectedItems.size === items.length}
+                            onChange={toggleSelectAll}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-xs font-semibold text-slate-500 uppercase">
+                            {selectedItems.size > 0 ? `${selectedItems.size} selected` : 'Select All'}
+                        </span>
+                    </div>
+
                     <div className="divide-y divide-gray-100 dark:divide-slate-800">
                         {items.length === 0 && (
                             <div className="p-12 text-center text-slate-500">Recycle Bin is empty</div>
                         )}
                         {items.map(item => (
-                            <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                                <div className="col-span-1 flex items-center">
+                            <div key={item.id} className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 md:grid md:grid-cols-12 md:gap-4">
+                                {/* Checkbox */}
+                                <div className="shrink-0 md:col-span-1 flex items-center">
                                     <input
                                         type="checkbox"
                                         checked={selectedItems.has(item.id)}
@@ -236,19 +234,38 @@ export default function RecycleBin() {
                                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                     />
                                 </div>
-                                <div className="col-span-5 font-medium flex items-center truncate">
-                                    {item.type === 'folder' ? <div className="h-8 w-8 bg-blue-100 dark:bg-blue-900/30 rounded flex items-center justify-center mr-3"><Trash2 className="h-4 w-4 text-blue-600" /></div> : <FileThumbnail fileId={item.id} type="file" name={item.name} />}
-                                    <span className="truncate" title={item.name}>{item.name}</span>
+
+                                {/* Name */}
+                                <div className="flex-1 min-w-0 md:col-span-5 font-medium flex items-center">
+                                    <div className="shrink-0 mr-2 md:mr-3">
+                                        {item.type === 'folder' ? (
+                                            <div className="h-8 w-8 bg-blue-100 dark:bg-blue-900/30 rounded flex items-center justify-center">
+                                                <Trash2 className="h-4 w-4 text-blue-600" />
+                                            </div>
+                                        ) : (
+                                            <FileThumbnail fileId={item.id} type="file" name={item.name} />
+                                        )}
+                                    </div>
+                                    <div className="truncate">
+                                        <span className="truncate block" title={item.name}>{item.name}</span>
+                                        <span className="md:hidden text-xs text-slate-400 capitalize">{item.type} · {new Date(item.deleted_at).toLocaleDateString()}</span>
+                                    </div>
                                 </div>
-                                <div className="col-span-2 text-sm text-slate-500 capitalize">{item.type}</div>
-                                <div className="col-span-2 text-sm text-slate-500">{new Date(item.deleted_at).toLocaleDateString()}</div>
-                                <div className="col-span-2 flex justify-end gap-2">
+
+                                {/* Type - desktop only */}
+                                <div className="hidden md:block md:col-span-2 text-sm text-slate-500 capitalize">{item.type}</div>
+
+                                {/* Date - desktop only */}
+                                <div className="hidden md:block md:col-span-2 text-sm text-slate-500">{new Date(item.deleted_at).toLocaleDateString()}</div>
+
+                                {/* Actions */}
+                                <div className="shrink-0 flex items-center gap-1 md:col-span-2 md:justify-end">
                                     <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => handleRestore(item.id, item.type)}
                                         title="Restore"
-                                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                        className="h-9 w-9 md:h-8 md:w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
                                     >
                                         <RefreshCw className="h-4 w-4" />
                                     </Button>
@@ -257,7 +274,7 @@ export default function RecycleBin() {
                                         size="sm"
                                         onClick={() => handlePermanentDelete(item.id, item.type)}
                                         title="Permanently Delete"
-                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        className="h-9 w-9 md:h-8 md:w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                     >
                                         <AlertTriangle className="h-4 w-4" />
                                     </Button>

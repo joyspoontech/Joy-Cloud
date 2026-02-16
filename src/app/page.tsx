@@ -26,12 +26,12 @@ export default function Home() {
               </a>
             ))}
           </nav>
-          <div className="flex space-x-4">
+          <div className="flex space-x-2 md:space-x-4">
             <Link href="/login">
-              <Button variant="ghost" className="hover:bg-blue-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-200">Log In</Button>
+              <Button variant="ghost" className="hidden sm:inline-flex hover:bg-blue-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-200">Log In</Button>
             </Link>
             <Link href="/login">
-              <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 shadow-lg shadow-blue-500/20 border-0">
+              <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 shadow-lg shadow-blue-500/20 border-0 text-sm md:text-base">
                 Get Started
               </Button>
             </Link>

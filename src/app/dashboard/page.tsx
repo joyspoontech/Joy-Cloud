@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
-import { Upload, FileText, Image as ImageIcon, Film, File as FileIcon, Download, Trash2, LogOut, Search, Clock, HardDrive, Folder, FolderPlus, ChevronRight, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Upload, FileText, Image as ImageIcon, Film, File as FileIcon, Download, Trash2, LogOut, Search, Clock, HardDrive, Folder, FolderPlus, ChevronRight, ArrowLeft, RefreshCw, Menu, X, LayoutGrid, List } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { FileThumbnail } from '@/components/ui/FileThumbnail';
+import { FilePreviewModal, isPreviewable } from '@/components/ui/FilePreviewModal';
+import { MediaGallery } from '@/components/ui/MediaGallery';
 
 interface FileRecord {
     id: string;
@@ -33,6 +35,11 @@ export default function Dashboard() {
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number; status: 'uploading' | 'complete' | 'error' }[]>([]);
     const [loading, setLoading] = useState(true);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
+    const [showGallery, setShowGallery] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -542,54 +549,133 @@ export default function Dashboard() {
             )}
 
             {/* Navbar */}
-            <header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-16 px-6 flex justify-between items-center sticky top-0 z-10">
-                <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
-                    <div className="h-8 w-8 relative bg-white rounded-lg shadow-sm overflow-hidden">
-                        <img src="/icon.png" alt="Joy Cloud" className="h-full w-full object-cover" />
+            <header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 sticky top-0 z-20">
+                <div className="h-14 md:h-16 px-4 md:px-6 flex justify-between items-center">
+                    <div className="flex items-center space-x-2 md:space-x-3 cursor-pointer" onClick={() => { setCurrentFolder(null); setBreadcrumbs([]); }}>
+                        <div className="h-8 w-8 relative bg-white rounded-lg shadow-sm overflow-hidden">
+                            <img src="/icon.png" alt="Joy Cloud" className="h-full w-full object-cover" />
+                        </div>
+                        <h1 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white tracking-tight">Joy Cloud</h1>
                     </div>
-                    <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Joy Cloud</h1>
-                </div>
 
-                <div className="flex-1 max-w-xl mx-8">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Search files..."
-                            className="w-full h-10 pl-10 pr-4 rounded-lg bg-slate-100 dark:bg-slate-800 border-transparent focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 transition-all outline-none text-sm"
-                        />
+                    {/* Desktop search */}
+                    <div className="hidden md:block flex-1 max-w-xl mx-8">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Search files..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full h-10 pl-10 pr-4 rounded-lg bg-slate-100 dark:bg-slate-800 border-transparent focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 transition-all outline-none text-sm"
+                            />
+                        </div>
                     </div>
-                </div>
 
-                <Button variant="ghost" size="sm" onClick={handleSync} loading={syncing} className="mr-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10">
-                    <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                    Sync
-                </Button>
-                {isAdmin && (
-                    <>
-                        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/pending-users')} className="mr-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10 relative">
-                            <Clock className="h-4 w-4 mr-2" />
-                            Pending Users
-                            {pendingUsersCount > 0 && (
-                                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-semibold">
-                                    {pendingUsersCount}
-                                </span>
+                    {/* Desktop nav buttons */}
+                    <div className="hidden md:flex items-center">
+                        <Button variant="ghost" size="sm" onClick={handleSync} loading={syncing} className="mr-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10">
+                            <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                            Sync
+                        </Button>
+                        {isAdmin && (
+                            <>
+                                <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/pending-users')} className="mr-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10 relative">
+                                    <Clock className="h-4 w-4 mr-2" />
+                                    Pending Users
+                                    {pendingUsersCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-semibold">
+                                            {pendingUsersCount}
+                                        </span>
+                                    )}
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/recycle-bin')} className="mr-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Recycle Bin
+                                </Button>
+                            </>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
+                            <LogOut className="h-4 w-4 mr-2" />
+                            Sign Out
+                        </Button>
+                    </div>
+
+                    {/* Mobile action buttons */}
+                    <div className="flex md:hidden items-center gap-1">
+                        <button
+                            onClick={handleSync}
+                            className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            title="Sync Files"
+                        >
+                            <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
+                        </button>
+                        <button
+                            onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+                            className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        >
+                            <Search className="h-5 w-5" />
+                        </button>
+                        <button
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 relative"
+                        >
+                            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                            {pendingUsersCount > 0 && !mobileMenuOpen && (
+                                <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500" />
                             )}
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/recycle-bin')} className="mr-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Recycle Bin
-                        </Button>
-                    </>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Mobile search bar */}
+                {mobileSearchOpen && (
+                    <div className="md:hidden px-4 pb-3">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Search files..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                autoFocus
+                                className="w-full h-10 pl-10 pr-4 rounded-lg bg-slate-100 dark:bg-slate-800 border-transparent focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 transition-all outline-none text-sm"
+                            />
+                        </div>
+                    </div>
                 )}
-                <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
-                </Button>
+
+                {/* Mobile menu dropdown */}
+                {mobileMenuOpen && (
+                    <div className="md:hidden border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-2 space-y-1">
+                        {isAdmin && (
+                            <>
+                                <button onClick={() => { router.push('/dashboard/pending-users'); setMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
+                                    <Clock className="h-4 w-4" />
+                                    Pending Users
+                                    {pendingUsersCount > 0 && (
+                                        <span className="ml-auto h-5 min-w-5 px-1.5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-semibold">
+                                            {pendingUsersCount}
+                                        </span>
+                                    )}
+                                </button>
+                                <button onClick={() => { router.push('/dashboard/recycle-bin'); setMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
+                                    <Trash2 className="h-4 w-4" />
+                                    Recycle Bin
+                                </button>
+                            </>
+                        )}
+                        <div className="border-t border-gray-200 dark:border-slate-800 my-1" />
+                        <button onClick={() => { handleSignOut(); setMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
+                            <LogOut className="h-4 w-4" />
+                            Sign Out
+                        </button>
+                    </div>
+                )}
             </header>
 
             {/* Main Content */}
-            <main className="flex-1 p-6 lg:p-8 max-w-7xl mx-auto w-full">
+            <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                     <div>
@@ -608,10 +694,21 @@ export default function Dashboard() {
                             ))}
                         </div>
                     </div>
-                    <div className="flex items-center space-x-3">
-                        <Button variant="ghost" onClick={handleCreateFolder} className="text-slate-600 dark:text-slate-300">
-                            <FolderPlus className="h-4 w-4 mr-2" />
-                            New Folder
+                    <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+                        <Button
+                            variant={showGallery ? 'secondary' : 'ghost'}
+                            size="sm"
+                            onClick={() => setShowGallery(!showGallery)}
+                            className={showGallery ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300'}
+                            title={showGallery ? 'Switch to list view' : 'Show media gallery'}
+                        >
+                            {showGallery ? <List className="h-4 w-4 mr-1 md:mr-2" /> : <LayoutGrid className="h-4 w-4 mr-1 md:mr-2" />}
+                            <span className="hidden sm:inline">{showGallery ? 'List' : 'Gallery'}</span>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={handleCreateFolder} className="text-slate-600 dark:text-slate-300">
+                            <FolderPlus className="h-4 w-4 mr-1 md:mr-2" />
+                            <span className="hidden sm:inline">New Folder</span>
+                            <span className="sm:hidden">Folder</span>
                         </Button>
                         <div className="relative">
                             <input
@@ -624,9 +721,10 @@ export default function Dashboard() {
                                 disabled={uploading}
                                 title="Upload folder"
                             />
-                            <Button variant="outline" loading={uploading} className="text-slate-600 dark:text-slate-300">
-                                <Folder className="h-4 w-4 mr-2" />
-                                Upload Folder
+                            <Button variant="outline" size="sm" loading={uploading} className="text-slate-600 dark:text-slate-300">
+                                <Folder className="h-4 w-4 mr-1 md:mr-2" />
+                                <span className="hidden sm:inline">Upload Folder</span>
+                                <span className="sm:hidden">Folder</span>
                             </Button>
                         </div>
                         <div className="relative">
@@ -638,9 +736,9 @@ export default function Dashboard() {
                                 disabled={uploading}
                                 title="Upload files"
                             />
-                            <Button loading={uploading} className="bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20">
-                                <Upload className="h-4 w-4 mr-2" />
-                                Upload Files
+                            <Button size="sm" loading={uploading} className="bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20">
+                                <Upload className="h-4 w-4 mr-1 md:mr-2" />
+                                Upload
                             </Button>
                         </div>
                     </div>
@@ -676,14 +774,28 @@ export default function Dashboard() {
                     </div>
                 )}
 
+                {/* Gallery View */}
+                {showGallery && (
+                    <div className="mb-6">
+                        <MediaGallery
+                            files={files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))}
+                            onPreview={(f) => setPreviewFile(f as FileRecord)}
+                        />
+                    </div>
+                )}
+
                 {/* Content Area */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[400px]">
+                <div className={`bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[300px] md:min-h-[400px] ${showGallery ? 'hidden' : ''}`}>
                     {/* Table Header */}
-                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                         <div className="col-span-6">Name</div>
                         <div className="col-span-2">Size</div>
                         <div className="col-span-3">Date Added</div>
                         <div className="col-span-1 text-right">Actions</div>
+                    </div>
+                    {/* Mobile Header */}
+                    <div className="md:hidden px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Files & Folders
                     </div>
 
                     {/* Loading */}
@@ -694,7 +806,7 @@ export default function Dashboard() {
                     )}
 
                     {/* Empty State */}
-                    {!loading && files.length === 0 && folders.length === 0 && (
+                    {!loading && files.length === 0 && folders.length === 0 && !searchQuery && (
                         <div className="flex flex-col items-center justify-center py-20 text-center">
                             <div className="h-20 w-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
                                 <Folder className="h-10 w-10 text-slate-400" />
@@ -704,16 +816,27 @@ export default function Dashboard() {
                         </div>
                     )}
 
+                    {/* No Search Results */}
+                    {!loading && searchQuery && folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-20 text-center">
+                            <div className="h-20 w-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                                <Search className="h-10 w-10 text-slate-400" />
+                            </div>
+                            <h3 className="text-lg font-medium text-slate-900 dark:text-white">No results found</h3>
+                            <p className="text-slate-500 max-w-sm mt-2">No files or folders match &ldquo;{searchQuery}&rdquo;</p>
+                        </div>
+                    )}
+
                     {/* Unified List Rows */}
                     <div className="divide-y divide-gray-100 dark:divide-slate-800">
                         {/* Render Folders First */}
-                        {folders.map((folder) => (
+                        {folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map((folder) => (
                             <div
                                 key={`folder-${folder.id}`}
                                 onClick={() => navigateToFolder(folder)}
-                                className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer"
+                                className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer md:grid md:grid-cols-12 md:gap-4"
                             >
-                                <div className="col-span-6 flex items-center min-w-0">
+                                <div className="flex items-center min-w-0 flex-1 md:col-span-6">
                                     <div className="mr-3 shrink-0">
                                         <div className="h-10 w-10 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center border border-blue-100 dark:border-blue-800/50">
                                             <Folder className="h-5 w-5 text-blue-500 fill-blue-500/20" />
@@ -724,14 +847,14 @@ export default function Dashboard() {
                                         <p className="text-xs text-slate-400">Folder</p>
                                     </div>
                                 </div>
-                                <div className="col-span-2 text-sm text-slate-400">
+                                <div className="hidden md:block md:col-span-2 text-sm text-slate-400">
                                     -
                                 </div>
-                                <div className="col-span-3 text-sm text-slate-600 dark:text-slate-400 flex items-center">
+                                <div className="hidden md:flex md:col-span-3 text-sm text-slate-600 dark:text-slate-400 items-center">
                                     <Clock className="h-3 w-3 mr-1.5 opacity-70" />
                                     {new Date(folder.created_at).toLocaleDateString()}
                                 </div>
-                                <div className="col-span-1 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="shrink-0 md:col-span-1 md:text-right opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                     <Button
                                         variant="ghost"
                                         size="sm"
@@ -739,35 +862,40 @@ export default function Dashboard() {
                                             e.stopPropagation();
                                             handleDelete(folder.id, 'folder');
                                         }}
-                                        className="h-8 w-8 p-0"
+                                        className="h-9 w-9 md:h-8 md:w-8 p-0"
                                         title="Delete"
                                     >
-                                        <Trash2 className="h-4 w-4 text-slate-500 hover:text-red-600" />
+                                        <Trash2 className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-red-600" />
                                     </Button>
                                 </div>
                             </div>
                         ))}
 
                         {/* Render Files */}
-                        {files.map((file) => (
-                            <div key={`file-${file.id}`} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                                <div className="col-span-6 flex items-center min-w-0">
+                        {files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map((file) => (
+                            <div
+                                key={`file-${file.id}`}
+                                onClick={() => isPreviewable(file.type) ? setPreviewFile(file) : handleDownload(file.id)}
+                                className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group md:grid md:grid-cols-12 md:gap-4 cursor-pointer">
+                                <div className="flex items-center min-w-0 flex-1 md:col-span-6">
                                     <div className="mr-3 shrink-0">
                                         <FileThumbnail fileId={file.id} type={file.type} name={file.name} />
                                     </div>
                                     <div className="truncate">
                                         <p className="font-medium text-slate-900 dark:text-slate-100 truncate" title={file.name}>{file.name}</p>
-                                        <p className="text-xs text-slate-400 truncate">{file.type}</p>
+                                        <p className="text-xs text-slate-400 truncate">
+                                            <span className="md:hidden">{formatSize(file.size)} · </span>{file.type}
+                                        </p>
                                     </div>
                                 </div>
-                                <div className="col-span-2 text-sm text-slate-600 dark:text-slate-400">
+                                <div className="hidden md:block md:col-span-2 text-sm text-slate-600 dark:text-slate-400">
                                     {formatSize(file.size)}
                                 </div>
-                                <div className="col-span-3 text-sm text-slate-600 dark:text-slate-400 flex items-center">
+                                <div className="hidden md:flex md:col-span-3 text-sm text-slate-600 dark:text-slate-400 items-center">
                                     <Clock className="h-3 w-3 mr-1.5 opacity-70" />
                                     {new Date(file.created_at).toLocaleDateString()}
                                 </div>
-                                <div className="col-span-1 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="shrink-0 flex items-center md:col-span-1 md:justify-end opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                     <Button
                                         variant="ghost"
                                         size="sm"
@@ -775,10 +903,10 @@ export default function Dashboard() {
                                             e.stopPropagation();
                                             handleDownload(file.id);
                                         }}
-                                        className="h-8 w-8 p-0"
+                                        className="h-9 w-9 md:h-8 md:w-8 p-0"
                                         title="Download"
                                     >
-                                        <Download className="h-4 w-4 text-slate-500 hover:text-blue-600" />
+                                        <Download className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-blue-600" />
                                     </Button>
                                     <Button
                                         variant="ghost"
@@ -787,10 +915,10 @@ export default function Dashboard() {
                                             e.stopPropagation();
                                             handleDelete(file.id, 'file');
                                         }}
-                                        className="h-8 w-8 p-0 ml-1"
+                                        className="h-9 w-9 md:h-8 md:w-8 p-0 ml-0.5"
                                         title="Delete"
                                     >
-                                        <Trash2 className="h-4 w-4 text-slate-500 hover:text-red-600" />
+                                        <Trash2 className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-red-600" />
                                     </Button>
                                 </div>
                             </div>
@@ -798,6 +926,15 @@ export default function Dashboard() {
                     </div>
                 </div>
             </main>
+
+            {/* File Preview Modal */}
+            <FilePreviewModal
+                file={previewFile}
+                onClose={() => setPreviewFile(null)}
+                onDownload={handleDownload}
+                allFiles={files}
+                onNavigate={(f) => setPreviewFile(f as FileRecord)}
+            />
         </div>
     );
 }

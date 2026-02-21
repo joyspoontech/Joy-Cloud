@@ -128,10 +128,6 @@ export default function LoginPage() {
         <div className="min-h-screen grid lg:grid-cols-2 bg-background">
             {/* Left Side - Form */}
             <div className="flex flex-col justify-center p-8 lg:p-16 xl:p-24 relative">
-                <Link href="/" className="absolute top-8 left-8 flex items-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">
-                    <ArrowLeft className="h-4 w-4 mr-2" /> Back home
-                </Link>
-
                 <div className="max-w-md w-full mx-auto space-y-8">
                     {initialLoading ? (
                         <div className="flex flex-col items-center justify-center space-y-4 py-20">

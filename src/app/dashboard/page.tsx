@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
-import { Upload, FileText, Image as ImageIcon, Film, File as FileIcon, Download, Trash2, LogOut, Search, Clock, HardDrive, Folder, FolderPlus, ChevronRight, ArrowLeft, RefreshCw, Menu, X, LayoutGrid, List } from 'lucide-react';
+import { Upload, FileText, Image as ImageIcon, Film, File as FileIcon, Download, Trash2, LogOut, Search, Clock, HardDrive, Folder, FolderPlus, ChevronRight, ArrowLeft, RefreshCw, Menu, X, LayoutGrid, List, CheckSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { FileThumbnail } from '@/components/ui/FileThumbnail';
@@ -40,6 +40,7 @@ export default function Dashboard() {
     const [searchQuery, setSearchQuery] = useState('');
     const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
     const [showGallery, setShowGallery] = useState(false);
+    const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
     const router = useRouter();
 
     useEffect(() => {
@@ -457,13 +458,83 @@ export default function Dashboard() {
 
         try {
             const res = await fetch(`/api/download?fileId=${fileId}`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` },
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`
+                }
             });
+
+            if (!res.ok) throw new Error('Failed to get download URL');
+
             const { url } = await res.json();
-            if (url) window.open(url, '_blank');
+
+            // Create a temporary hidden anchor to trigger download instead of window.open
+            // to avoid popup blockers when downloading multiple files
+            const a = document.createElement('a');
+            a.href = url;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Download error:', error);
+            alert('Failed to download file');
+        }
+    };
+
+    const handleBulkDownload = async () => {
+        if (selectedFiles.length === 0) return;
+
+        // Process sequentially with a tiny delay to avoid hitting rate limits or triggering overly aggressive pop-up blockers
+        for (const fileId of selectedFiles) {
+            await handleDownload(fileId);
+            await new Promise(r => setTimeout(r, 300));
+        }
+        setSelectedFiles([]);
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedFiles.length === 0) return;
+
+        if (!confirm(`Are you sure you want to delete ${selectedFiles.length} file(s)?`)) return;
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        try {
+            const res = await fetch(`/api/delete-items`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({
+                    items: selectedFiles.map(id => ({ id, type: 'file' }))
+                })
+            });
+
+            if (!res.ok) throw new Error('Failed to delete files');
+
+            fetchContent();
+            setSelectedFiles([]);
         } catch (error) {
             console.error(error);
-            alert('Download failed');
+            alert('Failed to delete selected files');
+        }
+    };
+
+    const toggleSelection = (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        setSelectedFiles(prev =>
+            prev.includes(id) ? prev.filter(fId => fId !== id) : [...prev, id]
+        );
+    };
+
+    const selectAll = () => {
+        const visibleFiles = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        if (selectedFiles.length === visibleFiles.length && visibleFiles.length > 0) {
+            setSelectedFiles([]);
+        } else {
+            setSelectedFiles(visibleFiles.map(f => f.id));
         }
     };
 
@@ -807,15 +878,24 @@ export default function Dashboard() {
                 {/* Content Area */}
                 <div className={`bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[300px] md:min-h-[400px] ${showGallery ? 'hidden' : ''}`}>
                     {/* Table Header */}
-                    <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                        <div className="col-span-6">Name</div>
+                    <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider items-center">
+                        <div className="col-span-6 flex items-center gap-3">
+                            <button onClick={selectAll} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                <CheckSquare className="h-4 w-4" />
+                            </button>
+                            <span>Name</span>
+                        </div>
                         <div className="col-span-2">Size</div>
                         <div className="col-span-3">Date Added</div>
                         <div className="col-span-1 text-right">Actions</div>
                     </div>
                     {/* Mobile Header */}
-                    <div className="md:hidden px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                        Files & Folders
+                    <div className="md:hidden flex items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        <span>Files & Folders</span>
+                        <button onClick={selectAll} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700">
+                            <CheckSquare className="h-3.5 w-3.5" />
+                            Select All
+                        </button>
                     </div>
 
                     {/* Loading */}
@@ -892,60 +972,96 @@ export default function Dashboard() {
                         ))}
 
                         {/* Render Files */}
-                        {files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map((file) => (
-                            <div
-                                key={`file-${file.id}`}
-                                onClick={() => isPreviewable(file.type) ? setPreviewFile(file) : handleDownload(file.id)}
-                                className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group md:grid md:grid-cols-12 md:gap-4 cursor-pointer">
-                                <div className="flex items-center min-w-0 flex-1 md:col-span-6">
-                                    <div className="mr-3 shrink-0">
-                                        <FileThumbnail fileId={file.id} type={file.type} name={file.name} />
+                        {files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map((file) => {
+                            const isSelected = selectedFiles.includes(file.id);
+                            return (
+                                <div
+                                    key={`file-${file.id}`}
+                                    onClick={() => isPreviewable(file.type) ? setPreviewFile(file) : handleDownload(file.id)}
+                                    className={`flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 transition-colors group md:grid md:grid-cols-12 md:gap-4 cursor-pointer ${isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+                                    <div className="flex items-center min-w-0 flex-1 md:col-span-6">
+                                        <div
+                                            onClick={(e) => toggleSelection(e, file.id)}
+                                            className={`mr-3 shrink-0 h-5 w-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'}`}
+                                        >
+                                            {isSelected && <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                        </div>
+                                        <div className="mr-3 shrink-0">
+                                            <FileThumbnail fileId={file.id} type={file.type} name={file.name} />
+                                        </div>
+                                        <div className="truncate">
+                                            <p className="font-medium text-slate-900 dark:text-slate-100 truncate" title={file.name}>{file.name}</p>
+                                            <p className="text-xs text-slate-400 truncate">
+                                                <span className="md:hidden">{formatSize(file.size)} · </span>{file.type}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="truncate">
-                                        <p className="font-medium text-slate-900 dark:text-slate-100 truncate" title={file.name}>{file.name}</p>
-                                        <p className="text-xs text-slate-400 truncate">
-                                            <span className="md:hidden">{formatSize(file.size)} · </span>{file.type}
-                                        </p>
+                                    <div className="hidden md:block md:col-span-2 text-sm text-slate-600 dark:text-slate-400">
+                                        {formatSize(file.size)}
+                                    </div>
+                                    <div className="hidden md:flex md:col-span-3 text-sm text-slate-600 dark:text-slate-400 items-center">
+                                        <Clock className="h-3 w-3 mr-1.5 opacity-70" />
+                                        {new Date(file.created_at).toLocaleDateString()}
+                                    </div>
+                                    <div className="shrink-0 flex items-center md:col-span-1 md:justify-end opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDownload(file.id);
+                                            }}
+                                            className="h-9 w-9 md:h-8 md:w-8 p-0"
+                                            title="Download"
+                                        >
+                                            <Download className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-blue-600" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDelete(file.id, 'file');
+                                            }}
+                                            className="h-9 w-9 md:h-8 md:w-8 p-0 ml-0.5"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-red-600" />
+                                        </Button>
                                     </div>
                                 </div>
-                                <div className="hidden md:block md:col-span-2 text-sm text-slate-600 dark:text-slate-400">
-                                    {formatSize(file.size)}
-                                </div>
-                                <div className="hidden md:flex md:col-span-3 text-sm text-slate-600 dark:text-slate-400 items-center">
-                                    <Clock className="h-3 w-3 mr-1.5 opacity-70" />
-                                    {new Date(file.created_at).toLocaleDateString()}
-                                </div>
-                                <div className="shrink-0 flex items-center md:col-span-1 md:justify-end opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDownload(file.id);
-                                        }}
-                                        className="h-9 w-9 md:h-8 md:w-8 p-0"
-                                        title="Download"
-                                    >
-                                        <Download className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-blue-600" />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDelete(file.id, 'file');
-                                        }}
-                                        className="h-9 w-9 md:h-8 md:w-8 p-0 ml-0.5"
-                                        title="Delete"
-                                    >
-                                        <Trash2 className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-red-600" />
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </main>
+
+            {/* Floating Bulk Action Bar */}
+            {selectedFiles.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 dark:bg-slate-800 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-4 z-50 animate-in slide-in-from-bottom-5">
+                    <span className="text-sm font-medium mr-2">{selectedFiles.length} selected</span>
+                    <button
+                        onClick={handleBulkDownload}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors"
+                    >
+                        <Download className="h-4 w-4" /> Download All
+                    </button>
+                    <button
+                        onClick={handleBulkDelete}
+                        className="flex items-center gap-2 hover:bg-red-500/20 text-red-400 hover:text-red-300 px-4 py-2 rounded-full text-sm font-medium transition-colors"
+                    >
+                        <Trash2 className="h-4 w-4" /> Delete
+                    </button>
+                    <div className="w-px h-6 bg-slate-700 mx-1"></div>
+                    <button
+                        onClick={() => setSelectedFiles([])}
+                        className="p-2 hover:bg-slate-800 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-400 hover:text-white"
+                        title="Cancel selection"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+            )}
 
             {/* File Preview Modal */}
             <FilePreviewModal

@@ -365,6 +365,16 @@ export default function Dashboard() {
             return;
         }
 
+        // Request screen wake lock to prevent the device from sleeping during long uploads
+        let wakeLock: any = null;
+        try {
+            if ('wakeLock' in navigator) {
+                wakeLock = await (navigator as any).wakeLock.request('screen');
+            }
+        } catch (err: any) {
+            console.warn(`Wake Lock error: ${err.name}, ${err.message}`);
+        }
+
         // Extract folder structure from file paths (for folder uploads)
         const folderStructure = extractFolderStructure(files);
 
@@ -406,6 +416,16 @@ export default function Dashboard() {
                     idx === i ? { ...p, status: 'error' } : p
                 ));
                 alert(`Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
+
+        // Release the wake lock after uploads finish
+        if (wakeLock !== null) {
+            try {
+                await wakeLock.release();
+                wakeLock = null;
+            } catch (err: any) {
+                console.warn(`Wake Lock release error: ${err.name}, ${err.message}`);
             }
         }
 

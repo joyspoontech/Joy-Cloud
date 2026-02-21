@@ -1,9 +1,35 @@
+"use client";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Shield, Cloud, Lock, CheckCircle2, ArrowRight } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+      if (session) {
+        router.push('/dashboard');
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      if (session) {
+        router.push('/dashboard');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [router]);
+
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-blue-500/20">
       {/* Navbar - Sticky Glass */}
@@ -27,14 +53,26 @@ export default function Home() {
             ))}
           </nav>
           <div className="flex space-x-2 md:space-x-4">
-            <Link href="/login">
-              <Button variant="ghost" className="hidden sm:inline-flex hover:bg-blue-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-200">Log In</Button>
-            </Link>
-            <Link href="/login">
-              <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 shadow-lg shadow-blue-500/20 border-0 text-sm md:text-base">
-                Get Started
-              </Button>
-            </Link>
+            {loading ? (
+              <div className="h-10 w-24 animate-pulse bg-slate-200 dark:bg-slate-800 rounded-md" />
+            ) : session ? (
+              <Link href="/dashboard">
+                <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 shadow-lg shadow-blue-500/20 border-0 text-sm md:text-base">
+                  Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="ghost" className="hidden sm:inline-flex hover:bg-blue-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-200">Log In</Button>
+                </Link>
+                <Link href="/login">
+                  <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 shadow-lg shadow-blue-500/20 border-0 text-sm md:text-base">
+                    Get Started
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>

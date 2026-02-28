@@ -9,9 +9,11 @@ interface FileThumbnailProps {
     fileId: string;
     type: string;
     name: string;
+    isPublic?: boolean;
+    publicToken?: string;
 }
 
-export function FileThumbnail({ fileId, type, name }: FileThumbnailProps) {
+export function FileThumbnail({ fileId, type, name, isPublic, publicToken }: FileThumbnailProps) {
     const [imageUrl, setImageUrl] = useState<string | null>(null);
 
     useEffect(() => {
@@ -22,14 +24,30 @@ export function FileThumbnail({ fileId, type, name }: FileThumbnailProps) {
 
     const fetchPreviewUrl = async () => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) return;
+            let urlToFetch = '';
 
-            const res = await fetch(`/api/download?fileId=${fileId}&preview=true`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` },
-            });
-            const { url } = await res.json();
-            if (url) setImageUrl(url);
+            if (isPublic && publicToken) {
+                // Public fetch - no auth needed
+                urlToFetch = `/api/public/download?fileId=${fileId}&token=${publicToken}&preview=true`;
+                const res = await fetch(urlToFetch);
+                if (res.ok) {
+                    const { url } = await res.json();
+                    if (url) setImageUrl(url);
+                }
+            } else {
+                // Authenticated fetch
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) return;
+
+                urlToFetch = `/api/download?fileId=${fileId}&preview=true`;
+                const res = await fetch(urlToFetch, {
+                    headers: { 'Authorization': `Bearer ${session.access_token}` },
+                });
+                if (res.ok) {
+                    const { url } = await res.json();
+                    if (url) setImageUrl(url);
+                }
+            }
         } catch (error) {
             console.error("Failed to load thumbnail", error);
         }

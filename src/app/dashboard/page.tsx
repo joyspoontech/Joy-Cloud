@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
-import { Upload, FileText, Image as ImageIcon, Film, File as FileIcon, Download, Trash2, LogOut, Search, Clock, HardDrive, Folder, FolderPlus, ChevronRight, ArrowLeft, RefreshCw, Menu, X, LayoutGrid, List, CheckSquare } from 'lucide-react';
+import { Upload, FileText, Image as ImageIcon, Film, File as FileIcon, Download, Trash2, LogOut, Search, Clock, HardDrive, Folder, FolderPlus, ChevronRight, ArrowLeft, RefreshCw, Menu, X, LayoutGrid, List, CheckSquare, Share2, Edit2, Link as LinkIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { FileThumbnail } from '@/components/ui/FileThumbnail';
 import { FilePreviewModal, isPreviewable } from '@/components/ui/FilePreviewModal';
 import { MediaGallery } from '@/components/ui/MediaGallery';
+import { ShareModal } from '@/components/ui/ShareModal';
+import { RenameModal } from '@/components/ui/RenameModal';
 
 interface FileRecord {
     id: string;
@@ -41,6 +43,11 @@ export default function Dashboard() {
     const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
     const [showGallery, setShowGallery] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+    const [shareModalOpen, setShareModalOpen] = useState(false);
+    const [shareItem, setShareItem] = useState<{ id: string, type: 'file' | 'folder', name: string } | null>(null);
+
+    const [renameModalOpen, setRenameModalOpen] = useState(false);
+    const [renameItem, setRenameItem] = useState<{ id: string, currentName: string } | null>(null);
     const router = useRouter();
 
     useEffect(() => {
@@ -495,7 +502,7 @@ export default function Dashboard() {
     const handleBulkDelete = async () => {
         if (selectedFiles.length === 0) return;
 
-        if (!confirm(`Are you sure you want to delete ${selectedFiles.length} file(s)?`)) return;
+        if (!confirm(`Are you sure you want to delete ${selectedFiles.length} item(s)?`)) return;
 
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
@@ -508,7 +515,10 @@ export default function Dashboard() {
                     'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify({
-                    items: selectedFiles.map(id => ({ id, type: 'file' }))
+                    items: selectedFiles.map(id => {
+                        const isFolder = folders.some(f => f.id === id);
+                        return { id, type: isFolder ? 'folder' : 'file' };
+                    })
                 })
             });
 
@@ -531,10 +541,13 @@ export default function Dashboard() {
 
     const selectAll = () => {
         const visibleFiles = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
-        if (selectedFiles.length === visibleFiles.length && visibleFiles.length > 0) {
+        const visibleFolders = folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        const allVisibleIds = [...visibleFolders.map(f => f.id), ...visibleFiles.map(f => f.id)];
+
+        if (selectedFiles.length === allVisibleIds.length && allVisibleIds.length > 0) {
             setSelectedFiles([]);
         } else {
-            setSelectedFiles(visibleFiles.map(f => f.id));
+            setSelectedFiles(allVisibleIds);
         }
     };
 
@@ -665,6 +678,10 @@ export default function Dashboard() {
 
                     {/* Desktop nav buttons */}
                     <div className="hidden md:flex items-center">
+                        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/shared-links')} className="mr-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10 relative">
+                            <LinkIcon className="h-4 w-4 mr-2" />
+                            Shared Links
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={handleSync} loading={syncing} className="mr-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10">
                             <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
                             Sync
@@ -739,6 +756,10 @@ export default function Dashboard() {
                 {/* Mobile menu dropdown */}
                 {mobileMenuOpen && (
                     <div className="md:hidden border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-2 space-y-1">
+                        <button onClick={() => { router.push('/dashboard/shared-links'); setMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
+                            <LinkIcon className="h-4 w-4" />
+                            Shared Links
+                        </button>
                         {isAdmin && (
                             <>
                                 <button onClick={() => { router.push('/dashboard/pending-users'); setMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -930,46 +951,81 @@ export default function Dashboard() {
                     {/* Unified List Rows */}
                     <div className="divide-y divide-gray-100 dark:divide-slate-800">
                         {/* Render Folders First */}
-                        {folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map((folder) => (
-                            <div
-                                key={`folder-${folder.id}`}
-                                onClick={() => navigateToFolder(folder)}
-                                className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer md:grid md:grid-cols-12 md:gap-4"
-                            >
-                                <div className="flex items-center min-w-0 flex-1 md:col-span-6">
-                                    <div className="mr-3 shrink-0">
-                                        <div className="h-10 w-10 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center border border-blue-100 dark:border-blue-800/50">
-                                            <Folder className="h-5 w-5 text-blue-500 fill-blue-500/20" />
+                        {folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map((folder) => {
+                            const isSelected = selectedFiles.includes(folder.id);
+                            return (
+                                <div
+                                    key={`folder-${folder.id}`}
+                                    onClick={() => navigateToFolder(folder)}
+                                    className={`flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 transition-colors group cursor-pointer md:grid md:grid-cols-12 md:gap-4 ${isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                                >
+                                    <div className="flex items-center min-w-0 flex-1 md:col-span-6">
+                                        <div
+                                            onClick={(e) => toggleSelection(e, folder.id)}
+                                            className={`mr-3 shrink-0 h-5 w-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'}`}
+                                        >
+                                            {isSelected && <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                        </div>
+                                        <div className="mr-3 shrink-0">
+                                            <div className="h-10 w-10 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center border border-blue-100 dark:border-blue-800/50">
+                                                <Folder className="h-5 w-5 text-blue-500 fill-blue-500/20" />
+                                            </div>
+                                        </div>
+                                        <div className="truncate">
+                                            <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{folder.name}</p>
+                                            <p className="text-xs text-slate-400">Folder</p>
                                         </div>
                                     </div>
-                                    <div className="truncate">
-                                        <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{folder.name}</p>
-                                        <p className="text-xs text-slate-400">Folder</p>
+                                    <div className="hidden md:block md:col-span-2 text-sm text-slate-400">
+                                        -
+                                    </div>
+                                    <div className="hidden md:flex md:col-span-3 text-sm text-slate-600 dark:text-slate-400 items-center">
+                                        <Clock className="h-3 w-3 mr-1.5 opacity-70" />
+                                        {new Date(folder.created_at).toLocaleDateString()}
+                                    </div>
+                                    <div className="shrink-0 flex items-center md:col-span-1 md:justify-end opacity-100 transition-opacity">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setRenameItem({ id: folder.id, currentName: folder.name });
+                                                setRenameModalOpen(true);
+                                            }}
+                                            className="h-9 w-9 md:h-8 md:w-8 p-0"
+                                            title="Rename"
+                                        >
+                                            <Edit2 className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-green-600" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShareItem({ id: folder.id, type: 'folder', name: folder.name });
+                                                setShareModalOpen(true);
+                                            }}
+                                            className="h-9 w-9 md:h-8 md:w-8 p-0 ml-0.5"
+                                            title="Share"
+                                        >
+                                            <Share2 className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-blue-600" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDelete(folder.id, 'folder');
+                                            }}
+                                            className="h-9 w-9 md:h-8 md:w-8 p-0 ml-0.5"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-red-600" />
+                                        </Button>
                                     </div>
                                 </div>
-                                <div className="hidden md:block md:col-span-2 text-sm text-slate-400">
-                                    -
-                                </div>
-                                <div className="hidden md:flex md:col-span-3 text-sm text-slate-600 dark:text-slate-400 items-center">
-                                    <Clock className="h-3 w-3 mr-1.5 opacity-70" />
-                                    {new Date(folder.created_at).toLocaleDateString()}
-                                </div>
-                                <div className="shrink-0 md:col-span-1 md:text-right opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDelete(folder.id, 'folder');
-                                        }}
-                                        className="h-9 w-9 md:h-8 md:w-8 p-0"
-                                        title="Delete"
-                                    >
-                                        <Trash2 className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-red-600" />
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         {/* Render Files */}
                         {files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map((file) => {
@@ -1009,9 +1065,22 @@ export default function Dashboard() {
                                             size="sm"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                handleDownload(file.id);
+                                                setShareItem({ id: file.id, type: 'file', name: file.name });
+                                                setShareModalOpen(true);
                                             }}
                                             className="h-9 w-9 md:h-8 md:w-8 p-0"
+                                            title="Share"
+                                        >
+                                            <Share2 className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-blue-600" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDownload(file.id);
+                                            }}
+                                            className="h-9 w-9 md:h-8 md:w-8 p-0 ml-0.5"
                                             title="Download"
                                         >
                                             <Download className="h-4 w-4 text-slate-400 md:text-slate-500 hover:text-blue-600" />
@@ -1040,6 +1109,28 @@ export default function Dashboard() {
             {selectedFiles.length > 0 && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 dark:bg-slate-800 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-4 z-50 animate-in slide-in-from-bottom-5">
                     <span className="text-sm font-medium mr-2">{selectedFiles.length} selected</span>
+                    {selectedFiles.length === 1 && (
+                        <>
+                            <button
+                                onClick={() => {
+                                    const id = selectedFiles[0];
+                                    const file = files.find(f => f.id === id);
+                                    const folder = folders.find(f => f.id === id);
+
+                                    if (file) {
+                                        setShareItem({ id: file.id, type: 'file', name: file.name });
+                                    } else if (folder) {
+                                        setShareItem({ id: folder.id, type: 'folder', name: folder.name });
+                                    }
+                                    setShareModalOpen(true);
+                                }}
+                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors"
+                            >
+                                <Share2 className="h-4 w-4" /> Share
+                            </button>
+                            <div className="w-px h-6 bg-slate-700 mx-1"></div>
+                        </>
+                    )}
                     <button
                         onClick={handleBulkDownload}
                         className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors"
@@ -1071,6 +1162,26 @@ export default function Dashboard() {
                 allFiles={files}
                 onNavigate={(f) => setPreviewFile(f as FileRecord)}
             />
+
+            {shareItem && (
+                <ShareModal
+                    isOpen={shareModalOpen}
+                    onClose={() => setShareModalOpen(false)}
+                    itemId={shareItem.id}
+                    itemType={shareItem.type}
+                    itemName={shareItem.name}
+                />
+            )}
+
+            {renameItem && (
+                <RenameModal
+                    isOpen={renameModalOpen}
+                    onClose={() => setRenameModalOpen(false)}
+                    itemId={renameItem.id}
+                    currentName={renameItem.currentName}
+                    onRenameSuccess={fetchContent}
+                />
+            )}
         </div>
     );
 }

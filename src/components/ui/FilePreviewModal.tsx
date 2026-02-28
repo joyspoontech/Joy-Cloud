@@ -17,9 +17,11 @@ interface FilePreviewModalProps {
     onDownload: (fileId: string) => void;
     allFiles: PreviewFile[];
     onNavigate: (file: PreviewFile) => void;
+    isPublic?: boolean;
+    publicToken?: string;
 }
 
-export function FilePreviewModal({ file, onClose, onDownload, allFiles, onNavigate }: FilePreviewModalProps) {
+export function FilePreviewModal({ file, onClose, onDownload, allFiles, onNavigate, isPublic, publicToken }: FilePreviewModalProps) {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
@@ -57,15 +59,27 @@ export function FilePreviewModal({ file, onClose, onDownload, allFiles, onNaviga
 
     const fetchPreviewUrl = async (fileId: string) => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) return;
+            let res;
+            if (isPublic && publicToken) {
+                // Public fetch - no auth needed
+                res = await fetch(`/api/public/download?fileId=${fileId}&token=${publicToken}&preview=true`);
+            } else {
+                // Authenticated fetch
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) return;
 
-            const res = await fetch(`/api/download?fileId=${fileId}&preview=true`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` },
-            });
-            const { url } = await res.json();
-            if (url) {
-                setPreviewUrl(url);
+                res = await fetch(`/api/download?fileId=${fileId}&preview=true`, {
+                    headers: { 'Authorization': `Bearer ${session.access_token}` },
+                });
+            }
+
+            if (res && res.ok) {
+                const { url } = await res.json();
+                if (url) {
+                    setPreviewUrl(url);
+                } else {
+                    setError(true);
+                }
             } else {
                 setError(true);
             }

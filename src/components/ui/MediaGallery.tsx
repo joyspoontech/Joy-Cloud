@@ -14,9 +14,11 @@ interface MediaFile {
 interface MediaGalleryProps {
     files: MediaFile[];
     onPreview: (file: MediaFile) => void;
+    isPublic?: boolean;
+    publicToken?: string;
 }
 
-export function MediaGallery({ files, onPreview }: MediaGalleryProps) {
+export function MediaGallery({ files, onPreview, isPublic, publicToken }: MediaGalleryProps) {
     const mediaFiles = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
 
     if (mediaFiles.length === 0) {
@@ -38,14 +40,14 @@ export function MediaGallery({ files, onPreview }: MediaGalleryProps) {
             </div>
             <div className="p-3 md:p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-3">
                 {mediaFiles.map(file => (
-                    <MediaTile key={file.id} file={file} onClick={() => onPreview(file)} />
+                    <MediaTile key={file.id} file={file} onClick={() => onPreview(file)} isPublic={isPublic} publicToken={publicToken} />
                 ))}
             </div>
         </div>
     );
 }
 
-function MediaTile({ file, onClick }: { file: MediaFile; onClick: () => void }) {
+function MediaTile({ file, onClick, isPublic, publicToken }: { file: MediaFile; onClick: () => void; isPublic?: boolean; publicToken?: string }) {
     const [thumbUrl, setThumbUrl] = useState<string | null>(null);
     const [loaded, setLoaded] = useState(false);
     const isVideo = file.type.startsWith('video/');
@@ -56,12 +58,18 @@ function MediaTile({ file, onClick }: { file: MediaFile; onClick: () => void }) 
 
     const fetchThumb = async () => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) return;
+            let res;
+            if (isPublic && publicToken) {
+                res = await fetch(`/api/public/download?fileId=${file.id}&token=${publicToken}&preview=true`);
+            } else {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) return;
 
-            const res = await fetch(`/api/download?fileId=${file.id}&preview=true`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` },
-            });
+                res = await fetch(`/api/download?fileId=${file.id}&preview=true`, {
+                    headers: { 'Authorization': `Bearer ${session.access_token}` },
+                });
+            }
+            if (!res.ok) return;
             const { url } = await res.json();
             if (url) setThumbUrl(url);
         } catch {

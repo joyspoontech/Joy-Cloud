@@ -508,21 +508,17 @@ export default function Dashboard() {
         if (!session) return;
 
         try {
-            const res = await fetch(`/api/delete-items`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
-                },
-                body: JSON.stringify({
-                    items: selectedFiles.map(id => {
-                        const isFolder = folders.some(f => f.id === id);
-                        return { id, type: isFolder ? 'folder' : 'file' };
-                    })
-                })
-            });
+            const fileIds = selectedFiles.filter(id => files.some(f => f.id === id));
+            const folderIds = selectedFiles.filter(id => folders.some(f => f.id === id));
 
-            if (!res.ok) throw new Error('Failed to delete files');
+            if (fileIds.length > 0) {
+                const { error } = await supabase.from('files').update({ deleted_at: new Date().toISOString() }).in('id', fileIds);
+                if (error) throw error;
+            }
+            if (folderIds.length > 0) {
+                const { error } = await supabase.from('folders').update({ deleted_at: new Date().toISOString() }).in('id', folderIds);
+                if (error) throw error;
+            }
 
             fetchContent();
             setSelectedFiles([]);
